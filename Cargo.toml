@@ -25,7 +25,7 @@ features = ['global']
 doctest = false
 
 [target.'cfg(all(unix, not(target_arch = "wasm32")))'.dependencies]
-libc = { version = "0.2", default-features = false }
+libc = { version = "0.2", default-features = false, optional = true }
 
 [dependencies]
 # For more information on these dependencies see rust-lang/rust's
@@ -53,9 +53,18 @@ debug-assertions = true
 [features]
 # Enable implementations of the `GlobalAlloc` standard library API, exporting a
 # new `GlobalDlmalloc` as well which implements this trait.
-global = []
+global = ["system", "rust_api"]
 
 # Enable very expensive debug checks in this crate
 debug = []
 
+# Enables OS APIs based on the current target, can be implemented manually
+# otherwise.
+system = ["libc"]
+
 rustc-dep-of-std = ['core', 'compiler_builtins/rustc-dep-of-std']
+
+c_api = []
+rust_api = []
+
+default = ["global", "rust_api"]

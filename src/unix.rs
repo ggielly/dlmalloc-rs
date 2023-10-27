@@ -45,7 +45,7 @@ unsafe impl Allocator for System {
         }
     }
 
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "redox", target_os = "macos"))]
     fn remap(&self, _ptr: *mut u8, _oldsize: usize, _newsize: usize, _can_move: bool) -> *mut u8 {
         ptr::null_mut()
     }
@@ -61,7 +61,7 @@ unsafe impl Allocator for System {
         }
     }
 
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "redox", target_os = "macos"))]
     fn free_part(&self, ptr: *mut u8, oldsize: usize, newsize: usize) -> bool {
         unsafe { libc::munmap(ptr.add(newsize).cast(), oldsize - newsize) == 0 }
     }

@@ -3,6 +3,9 @@
 //
 // The original source was written by Doug Lea and released to the public domain
 
+// TODO
+#![allow(missing_docs)]
+
 macro_rules! debug_assert {
     ($($arg:tt)*) => {
         if cfg!(all(feature = "debug", debug_assertions)) {

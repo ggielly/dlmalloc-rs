@@ -14,16 +14,21 @@
 #![allow(dead_code)]
 #![no_std]
 #![deny(missing_docs)]
-#![cfg_attr(target_arch = "wasm64", feature(simd_wasm64))]
 
-use core::cmp;
-use core::ptr;
+#[cfg(feature = "rust_api")]
+use core::{cmp, ptr};
+
+#[cfg(feature = "system")]
 use sys::System;
 
 #[cfg(feature = "global")]
 pub use self::global::{enable_alloc_after_fork, GlobalDlmalloc};
 
 mod dlmalloc;
+
+#[cfg(feature = "c_api")]
+pub use dlmalloc::Dlmalloc as DlmallocCApi;
+
 #[cfg(feature = "global")]
 mod global;
 
@@ -71,19 +76,25 @@ pub unsafe trait Allocator: Send {
 /// Instances of this type are used to allocate blocks of memory. For best
 /// results only use one of these. Currently doesn't implement `Drop` to release
 /// lingering memory back to the OS. That may happen eventually though!
-pub struct Dlmalloc<A = System>(dlmalloc::Dlmalloc<A>);
+#[cfg(feature = "rust_api")]
+pub struct Dlmalloc<
+    #[cfg(feature = "system")]
+    A = System,
+    #[cfg(not(feature = "system"))]
+    A,
+>(dlmalloc::Dlmalloc<A>);
 
 cfg_if::cfg_if! {
-    if #[cfg(target_family = "wasm")] {
+    if #[cfg(all(feature = "system", target_family = "wasm"))] {
         #[path = "wasm.rs"]
         mod sys;
-    } else if #[cfg(target_os = "windows")] {
+    } else if #[cfg(all(feature = "system", target_os = "windows"))] {
         #[path = "windows.rs"]
         mod sys;
-    } else if #[cfg(target_os = "xous")] {
+    } else if #[cfg(all(feature = "system", target_os = "xous"))] {
         #[path = "xous.rs"]
         mod sys;
-    } else if #[cfg(any(target_os = "linux", target_os = "macos"))] {
+    } else if #[cfg(all(feature = "system", any(target_os = "linux", target_os = "macos", target_os = "redox")))] {
         #[path = "unix.rs"]
         mod sys;
     } else {
@@ -92,6 +103,8 @@ cfg_if::cfg_if! {
     }
 }
 
+#[cfg(feature = "system")]
+#[cfg(feature = "rust_api")]
 impl Dlmalloc<System> {
     /// Creates a new instance of an allocator
     pub const fn new() -> Dlmalloc<System> {
@@ -99,6 +112,7 @@ impl Dlmalloc<System> {
     }
 }
 
+#[cfg(feature = "rust_api")]
 impl<A> Dlmalloc<A> {
     /// Creates a new instance of an allocator
     pub const fn new_with_allocator(sys_allocator: A) -> Dlmalloc<A> {
@@ -106,6 +120,7 @@ impl<A> Dlmalloc<A> {
     }
 }
 
+#[cfg(feature = "rust_api")]
 impl<A: Allocator> Dlmalloc<A> {
     /// Allocates `size` bytes with `align` align.
     ///
