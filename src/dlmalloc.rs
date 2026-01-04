@@ -22,9 +22,7 @@ macro_rules! debug_assert_eq {
     };
 }
 
-use core::cmp;
-use core::mem;
-use core::ptr;
+use core::{cmp, mem, ptr};
 
 use crate::Allocator;
 
@@ -1189,6 +1187,13 @@ impl<A: Allocator> Dlmalloc<A> {
                 (*c1).parent = r;
             }
         }
+    }
+
+    pub unsafe fn usable_size(&mut self, ptr: *mut u8) -> usize {
+        let p = Chunk::from_mem(ptr);
+        let psize = Chunk::size(p);
+
+        psize
     }
 
     pub unsafe fn validate_size(&mut self, ptr: *mut u8, size: usize) {
