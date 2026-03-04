@@ -7,6 +7,7 @@ pub struct System {
 }
 
 impl System {
+    /// Creates a new instance.
     pub const fn new() -> System {
         System { _priv: () }
     }
@@ -16,6 +17,7 @@ impl System {
 static mut LOCK: libc::pthread_mutex_t = libc::PTHREAD_MUTEX_INITIALIZER;
 
 unsafe impl Allocator for System {
+    /// Implements alloc.
     fn alloc(&self, size: usize) -> (*mut u8, usize, u32) {
         let addr = unsafe {
             libc::mmap(
@@ -35,6 +37,7 @@ unsafe impl Allocator for System {
     }
 
     #[cfg(target_os = "linux")]
+    /// Implements remap.
     fn remap(&self, ptr: *mut u8, oldsize: usize, newsize: usize, can_move: bool) -> *mut u8 {
         let flags = if can_move { libc::MREMAP_MAYMOVE } else { 0 };
         let ptr = unsafe { libc::mremap(ptr.cast(), oldsize, newsize, flags) };
@@ -46,11 +49,13 @@ unsafe impl Allocator for System {
     }
 
     #[cfg(any(target_os = "redox", target_os = "macos"))]
+    /// Implements remap.
     fn remap(&self, _ptr: *mut u8, _oldsize: usize, _newsize: usize, _can_move: bool) -> *mut u8 {
         ptr::null_mut()
     }
 
     #[cfg(target_os = "linux")]
+    /// Implements free part.
     fn free_part(&self, ptr: *mut u8, oldsize: usize, newsize: usize) -> bool {
         unsafe {
             let rc = libc::mremap(ptr.cast(), oldsize, newsize, 0);
@@ -62,33 +67,40 @@ unsafe impl Allocator for System {
     }
 
     #[cfg(any(target_os = "redox", target_os = "macos"))]
+    /// Implements free part.
     fn free_part(&self, ptr: *mut u8, oldsize: usize, newsize: usize) -> bool {
         unsafe { libc::munmap(ptr.add(newsize).cast(), oldsize - newsize) == 0 }
     }
 
+    /// Implements free.
     fn free(&self, ptr: *mut u8, size: usize) -> bool {
         unsafe { libc::munmap(ptr.cast(), size) == 0 }
     }
 
+    /// Implements can release part.
     fn can_release_part(&self, _flags: u32) -> bool {
         true
     }
 
+    /// Implements allocates zeros.
     fn allocates_zeros(&self) -> bool {
         true
     }
 
+    /// Implements page size.
     fn page_size(&self) -> usize {
         4096
     }
 }
 
 #[cfg(feature = "global")]
+/// Implements acquire global lock.
 pub fn acquire_global_lock() {
     unsafe { assert_eq!(libc::pthread_mutex_lock(ptr::addr_of_mut!(LOCK)), 0) }
 }
 
 #[cfg(feature = "global")]
+/// Implements release global lock.
 pub fn release_global_lock() {
     unsafe { assert_eq!(libc::pthread_mutex_unlock(ptr::addr_of_mut!(LOCK)), 0) }
 }
@@ -106,10 +118,12 @@ pub unsafe fn enable_alloc_after_fork() {
     // where the handler attempts to acquire the global lock twice
     static mut FORK_PROTECTED: bool = false;
 
+    /// Implements acquire global lock.
     unsafe extern "C" fn _acquire_global_lock() {
         acquire_global_lock()
     }
 
+    /// Implements release global lock.
     unsafe extern "C" fn _release_global_lock() {
         release_global_lock()
     }

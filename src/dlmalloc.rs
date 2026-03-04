@@ -84,19 +84,23 @@ struct Segment {
     flags: u32,
 }
 
+/// Implements align up.
 fn align_up(a: usize, alignment: usize) -> usize {
     debug_assert!(alignment.is_power_of_two());
     (a + (alignment - 1)) & !(alignment - 1)
 }
 
+/// Implements left bits.
 fn left_bits(x: u32) -> u32 {
     (x << 1) | (!(x << 1)).wrapping_add(1)
 }
 
+/// Implements least bit.
 fn least_bit(x: u32) -> u32 {
     x & (!x + 1)
 }
 
+/// Implements leftshift for tree index.
 fn leftshift_for_tree_index(x: u32) -> u32 {
     let x = usize::try_from(x).unwrap();
     if x == NTREEBINS - 1 {
@@ -107,6 +111,7 @@ fn leftshift_for_tree_index(x: u32) -> u32 {
 }
 
 impl<A> Dlmalloc<A> {
+    /// Creates a new instance.
     pub const fn new(system_allocator: A) -> Dlmalloc<A> {
         Dlmalloc {
             smallmap: 0,
@@ -132,6 +137,7 @@ impl<A> Dlmalloc<A> {
         }
     }
 
+    /// Implements allocator.
     pub fn allocator(&self) -> &A {
         &self.system_allocator
     }
@@ -139,45 +145,54 @@ impl<A> Dlmalloc<A> {
 
 impl<A: Allocator> Dlmalloc<A> {
     // TODO: can we get rid of this?
+    /// Implements malloc alignment.
     pub fn malloc_alignment(&self) -> usize {
         mem::size_of::<usize>() * 2
     }
 
     // TODO: dox
+    /// Implements chunk overhead.
     fn chunk_overhead(&self) -> usize {
         mem::size_of::<usize>()
     }
 
+    /// Implements mmap chunk overhead.
     fn mmap_chunk_overhead(&self) -> usize {
         2 * mem::size_of::<usize>()
     }
 
     // TODO: dox
+    /// Implements min large size.
     fn min_large_size(&self) -> usize {
         1 << TREEBIN_SHIFT
     }
 
     // TODO: dox
+    /// Implements max small size.
     fn max_small_size(&self) -> usize {
         self.min_large_size() - 1
     }
 
     // TODO: dox
+    /// Implements max small request.
     fn max_small_request(&self) -> usize {
         self.max_small_size() - (self.malloc_alignment() - 1) - self.chunk_overhead()
     }
 
     // TODO: dox
+    /// Implements min chunk size.
     fn min_chunk_size(&self) -> usize {
         align_up(mem::size_of::<Chunk>(), self.malloc_alignment())
     }
 
     // TODO: dox
+    /// Implements min request.
     fn min_request(&self) -> usize {
         self.min_chunk_size() - self.chunk_overhead() - 1
     }
 
     // TODO: dox
+    /// Implements max request.
     fn max_request(&self) -> usize {
         // min_sys_alloc_space: the largest `X` such that
         //   pad_request(X - 1)        -- minus 1, because requests of exactly
@@ -196,44 +211,54 @@ impl<A: Allocator> Dlmalloc<A> {
         cmp::min((!self.min_chunk_size() + 1) << 2, min_sys_alloc_space)
     }
 
+    /// Implements pad request.
     fn pad_request(&self, amt: usize) -> usize {
         align_up(amt + self.chunk_overhead(), self.malloc_alignment())
     }
 
+    /// Implements small index.
     fn small_index(&self, size: usize) -> u32 {
         (size >> SMALLBIN_SHIFT) as u32
     }
 
+    /// Implements small index2size.
     fn small_index2size(&self, idx: u32) -> usize {
         usize::try_from(idx).unwrap() << SMALLBIN_SHIFT
     }
 
+    /// Checks whether is small.
     fn is_small(&self, s: usize) -> bool {
         s >> SMALLBIN_SHIFT < NSMALLBINS
     }
 
+    /// Checks whether is aligned.
     fn is_aligned(&self, a: usize) -> bool {
         a & (self.malloc_alignment() - 1) == 0
     }
 
+    /// Implements align offset.
     fn align_offset(&self, addr: *mut u8) -> usize {
         addr.align_offset(self.malloc_alignment())
     }
 
+    /// Implements align offset usize.
     fn align_offset_usize(&self, addr: usize) -> usize {
         align_up(addr, self.malloc_alignment()) - addr
     }
 
+    /// Implements top foot size.
     fn top_foot_size(&self) -> usize {
         self.align_offset_usize(Chunk::mem_offset())
             + self.pad_request(mem::size_of::<Segment>())
             + self.min_chunk_size()
     }
 
+    /// Implements mmap foot pad.
     fn mmap_foot_pad(&self) -> usize {
         4 * mem::size_of::<usize>()
     }
 
+    /// Implements align as chunk.
     fn align_as_chunk(&self, ptr: *mut u8) -> *mut Chunk {
         unsafe {
             let chunk = Chunk::to_mem(ptr.cast());
@@ -241,6 +266,7 @@ impl<A: Allocator> Dlmalloc<A> {
         }
     }
 
+    /// Implements request2size.
     fn request2size(&self, req: usize) -> usize {
         if req < self.min_request() {
             self.min_chunk_size()
@@ -249,6 +275,10 @@ impl<A: Allocator> Dlmalloc<A> {
         }
     }
 
+    /// Implements overhead for.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn overhead_for(&self, p: *mut Chunk) -> usize {
         if Chunk::mmapped(p) {
             self.mmap_chunk_overhead()
@@ -257,10 +287,18 @@ impl<A: Allocator> Dlmalloc<A> {
         }
     }
 
+    /// Implements calloc must clear.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     pub unsafe fn calloc_must_clear(&self, ptr: *mut u8) -> bool {
         !self.system_allocator.allocates_zeros() || !Chunk::mmapped(Chunk::from_mem(ptr))
     }
 
+    /// Implements malloc.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     pub unsafe fn malloc(&mut self, size: usize) -> *mut u8 {
         self.check_malloc_state();
 
@@ -457,6 +495,10 @@ impl<A: Allocator> Dlmalloc<A> {
         return ptr::null_mut();
     }
 
+    /// Implements realloc.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     pub unsafe fn realloc(&mut self, oldmem: *mut u8, bytes: usize) -> *mut u8 {
         if bytes >= self.max_request() {
             return ptr::null_mut();
@@ -477,6 +519,10 @@ impl<A: Allocator> Dlmalloc<A> {
         return ptr;
     }
 
+    /// Implements try realloc chunk.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn try_realloc_chunk(&mut self, p: *mut Chunk, nb: usize, can_move: bool) -> *mut Chunk {
         let oldsize = Chunk::size(p);
         let next = Chunk::plus_offset(p, oldsize);
@@ -551,6 +597,10 @@ impl<A: Allocator> Dlmalloc<A> {
         }
     }
 
+    /// Implements mmap resize.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn mmap_resize(&mut self, oldp: *mut Chunk, nb: usize, can_move: bool) -> *mut Chunk {
         let oldsize = Chunk::size(oldp);
         // Can't shrink mmap regions below a small size
@@ -588,12 +638,17 @@ impl<A: Allocator> Dlmalloc<A> {
         return newp;
     }
 
+    /// Implements mmap align.
     fn mmap_align(&self, a: usize) -> usize {
         align_up(a, self.system_allocator.page_size())
     }
 
     // Only call this with power-of-two alignment and alignment >
     // `self.malloc_alignment()`
+    /// Implements memalign.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     pub unsafe fn memalign(&mut self, mut alignment: usize, bytes: usize) -> *mut u8 {
         if alignment < self.min_chunk_size() {
             alignment = self.min_chunk_size();
@@ -659,6 +714,10 @@ impl<A: Allocator> Dlmalloc<A> {
 
     // consolidate and bin a chunk, differs from exported versions of free
     // mainly in that the chunk need not be marked as inuse
+    /// Implements dispose chunk.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn dispose_chunk(&mut self, mut p: *mut Chunk, mut psize: usize) {
         let next = Chunk::plus_offset(p, psize);
         if !Chunk::pinuse(p) {
@@ -719,6 +778,10 @@ impl<A: Allocator> Dlmalloc<A> {
         self.insert_chunk(p, psize);
     }
 
+    /// Implements init top.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn init_top(&mut self, ptr: *mut Chunk, size: usize) {
         let offset = self.align_offset(Chunk::to_mem(ptr));
         let p = Chunk::plus_offset(ptr, offset);
@@ -731,6 +794,10 @@ impl<A: Allocator> Dlmalloc<A> {
         self.trim_check = DEFAULT_TRIM_THRESHOLD;
     }
 
+    /// Implements init bins.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn init_bins(&mut self) {
         for i in 0..NSMALLBINS_U32 {
             let bin = self.smallbin_at(i);
@@ -739,6 +806,10 @@ impl<A: Allocator> Dlmalloc<A> {
         }
     }
 
+    /// Implements prepend alloc.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn prepend_alloc(&mut self, newbase: *mut u8, oldbase: *mut u8, size: usize) -> *mut u8 {
         let p = self.align_as_chunk(newbase);
         let mut oldfirst = self.align_as_chunk(oldbase);
@@ -782,6 +853,10 @@ impl<A: Allocator> Dlmalloc<A> {
     }
 
     // add a segment to hold a new noncontiguous region
+    /// Implements add segment.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn add_segment(&mut self, tbase: *mut u8, tsize: usize, flags: u32) {
         // TODO: what in the world is this function doing
 
@@ -844,6 +919,10 @@ impl<A: Allocator> Dlmalloc<A> {
         self.check_malloc_state();
     }
 
+    /// Implements segment holding.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn segment_holding(&self, ptr: *mut u8) -> *mut Segment {
         let mut sp = &self.seg as *const Segment as *mut Segment;
         while !sp.is_null() {
@@ -855,6 +934,10 @@ impl<A: Allocator> Dlmalloc<A> {
         ptr::null_mut()
     }
 
+    /// Implements tmalloc small.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn tmalloc_small(&mut self, size: usize) -> *mut u8 {
         let leastbit = least_bit(self.treemap);
         let i = leastbit.trailing_zeros();
@@ -889,6 +972,10 @@ impl<A: Allocator> Dlmalloc<A> {
         Chunk::to_mem(vc)
     }
 
+    /// Implements tmalloc large.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn tmalloc_large(&mut self, size: usize) -> *mut u8 {
         let mut v = ptr::null_mut();
         let mut rsize = !size + 1;
@@ -963,18 +1050,27 @@ impl<A: Allocator> Dlmalloc<A> {
         Chunk::to_mem(vc)
     }
 
+    /// Implements smallbin at.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn smallbin_at(&mut self, idx: u32) -> *mut Chunk {
         let idx = usize::try_from(idx * 2).unwrap();
         debug_assert!(idx < self.smallbins.len());
         self.smallbins.as_mut_ptr().add(idx).cast()
     }
 
+    /// Implements treebin at.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn treebin_at(&mut self, idx: u32) -> *mut *mut TreeChunk {
         let idx = usize::try_from(idx).unwrap();
         debug_assert!(idx < self.treebins.len());
         self.treebins.as_mut_ptr().add(idx)
     }
 
+    /// Implements compute tree index.
     fn compute_tree_index(&self, size: usize) -> u32 {
         let x = size >> TREEBIN_SHIFT;
         if x == 0 {
@@ -987,6 +1083,10 @@ impl<A: Allocator> Dlmalloc<A> {
         }
     }
 
+    /// Implements unlink first small chunk.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn unlink_first_small_chunk(&mut self, head: *mut Chunk, next: *mut Chunk, idx: u32) {
         let ptr = (*next).prev;
         debug_assert!(next != head);
@@ -1000,6 +1100,10 @@ impl<A: Allocator> Dlmalloc<A> {
         }
     }
 
+    /// Implements replace dv.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn replace_dv(&mut self, chunk: *mut Chunk, size: usize) {
         let dvs = self.dvsize;
         debug_assert!(self.is_small(dvs));
@@ -1011,6 +1115,10 @@ impl<A: Allocator> Dlmalloc<A> {
         self.dv = chunk;
     }
 
+    /// Implements insert chunk.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn insert_chunk(&mut self, chunk: *mut Chunk, size: usize) {
         if self.is_small(size) {
             self.insert_small_chunk(chunk, size);
@@ -1019,6 +1127,10 @@ impl<A: Allocator> Dlmalloc<A> {
         }
     }
 
+    /// Implements insert small chunk.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn insert_small_chunk(&mut self, chunk: *mut Chunk, size: usize) {
         let idx = self.small_index(size);
         let head = self.smallbin_at(idx);
@@ -1036,6 +1148,10 @@ impl<A: Allocator> Dlmalloc<A> {
         (*chunk).next = head;
     }
 
+    /// Implements insert large chunk.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn insert_large_chunk(&mut self, chunk: *mut TreeChunk, size: usize) {
         let idx = self.compute_tree_index(size);
         let h = self.treebin_at(idx);
@@ -1079,30 +1195,58 @@ impl<A: Allocator> Dlmalloc<A> {
         }
     }
 
+    /// Implements smallmap is marked.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn smallmap_is_marked(&self, idx: u32) -> bool {
         self.smallmap & (1 << idx) != 0
     }
 
+    /// Implements mark smallmap.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn mark_smallmap(&mut self, idx: u32) {
         self.smallmap |= 1 << idx;
     }
 
+    /// Implements clear smallmap.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn clear_smallmap(&mut self, idx: u32) {
         self.smallmap &= !(1 << idx);
     }
 
+    /// Implements treemap is marked.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn treemap_is_marked(&self, idx: u32) -> bool {
         self.treemap & (1 << idx) != 0
     }
 
+    /// Implements mark treemap.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn mark_treemap(&mut self, idx: u32) {
         self.treemap |= 1 << idx;
     }
 
+    /// Implements clear treemap.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn clear_treemap(&mut self, idx: u32) {
         self.treemap &= !(1 << idx);
     }
 
+    /// Implements unlink chunk.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn unlink_chunk(&mut self, chunk: *mut Chunk, size: usize) {
         if self.is_small(size) {
             self.unlink_small_chunk(chunk, size)
@@ -1111,6 +1255,10 @@ impl<A: Allocator> Dlmalloc<A> {
         }
     }
 
+    /// Implements unlink small chunk.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn unlink_small_chunk(&mut self, chunk: *mut Chunk, size: usize) {
         let f = (*chunk).prev;
         let b = (*chunk).next;
@@ -1126,6 +1274,10 @@ impl<A: Allocator> Dlmalloc<A> {
         }
     }
 
+    /// Implements unlink large chunk.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn unlink_large_chunk(&mut self, chunk: *mut TreeChunk) {
         let xp = (*chunk).parent;
         let mut r;
@@ -1189,6 +1341,10 @@ impl<A: Allocator> Dlmalloc<A> {
         }
     }
 
+    /// Implements usable size.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     pub unsafe fn usable_size(&mut self, ptr: *mut u8) -> usize {
         let p = Chunk::from_mem(ptr);
         let psize = Chunk::size(p);
@@ -1196,6 +1352,10 @@ impl<A: Allocator> Dlmalloc<A> {
         psize
     }
 
+    /// Implements validate size.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     pub unsafe fn validate_size(&mut self, ptr: *mut u8, size: usize) {
         let p = Chunk::from_mem(ptr);
         let psize = Chunk::size(p);
@@ -1211,6 +1371,10 @@ impl<A: Allocator> Dlmalloc<A> {
         }
     }
 
+    /// Implements free.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     pub unsafe fn free(&mut self, mem: *mut u8) {
         self.check_malloc_state();
 
@@ -1291,10 +1455,15 @@ impl<A: Allocator> Dlmalloc<A> {
         }
     }
 
+    /// Implements should trim.
     fn should_trim(&self, size: usize) -> bool {
         size > self.trim_check
     }
 
+    /// Implements sys trim.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn sys_trim(&mut self, mut pad: usize) -> bool {
         let mut released = 0;
         if pad < self.max_request() && !self.top.is_null() {
@@ -1339,6 +1508,10 @@ impl<A: Allocator> Dlmalloc<A> {
         released != 0
     }
 
+    /// Checks whether has segment link.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn has_segment_link(&self, ptr: *mut Segment) -> bool {
         let mut sp = &self.seg as *const Segment as *mut Segment;
         while !sp.is_null() {
@@ -1403,6 +1576,10 @@ impl<A: Allocator> Dlmalloc<A> {
 
     // Sanity checks
 
+    /// Implements check any chunk.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn check_any_chunk(&self, p: *mut Chunk) {
         if !cfg!(all(feature = "debug", debug_assertions)) {
             return;
@@ -1413,6 +1590,10 @@ impl<A: Allocator> Dlmalloc<A> {
         debug_assert!(p as *mut u8 >= self.least_addr);
     }
 
+    /// Implements check top chunk.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn check_top_chunk(&self, p: *mut Chunk) {
         if !cfg!(all(feature = "debug", debug_assertions)) {
             return;
@@ -1434,6 +1615,10 @@ impl<A: Allocator> Dlmalloc<A> {
         debug_assert!(!Chunk::pinuse(Chunk::plus_offset(p, sz)));
     }
 
+    /// Implements check malloced chunk.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn check_malloced_chunk(&self, mem: *mut u8, s: usize) {
         if !cfg!(all(feature = "debug", debug_assertions)) {
             return;
@@ -1450,6 +1635,10 @@ impl<A: Allocator> Dlmalloc<A> {
         debug_assert!(Chunk::mmapped(p) || sz < (s + self.min_chunk_size()));
     }
 
+    /// Implements check inuse chunk.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn check_inuse_chunk(&self, p: *mut Chunk) {
         self.check_any_chunk(p);
         debug_assert!(Chunk::inuse(p));
@@ -1460,6 +1649,10 @@ impl<A: Allocator> Dlmalloc<A> {
         }
     }
 
+    /// Implements check mmapped chunk.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn check_mmapped_chunk(&self, p: *mut Chunk) {
         if !cfg!(all(feature = "debug", debug_assertions)) {
             return;
@@ -1480,6 +1673,10 @@ impl<A: Allocator> Dlmalloc<A> {
         );
     }
 
+    /// Implements check free chunk.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn check_free_chunk(&self, p: *mut Chunk) {
         if !cfg!(all(feature = "debug", debug_assertions)) {
             return;
@@ -1505,6 +1702,10 @@ impl<A: Allocator> Dlmalloc<A> {
         }
     }
 
+    /// Implements check malloc state.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn check_malloc_state(&mut self) {
         if !cfg!(all(feature = "debug", debug_assertions)) {
             return;
@@ -1533,6 +1734,10 @@ impl<A: Allocator> Dlmalloc<A> {
         debug_assert!(self.footprint <= self.max_footprint);
     }
 
+    /// Implements check smallbin.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn check_smallbin(&mut self, idx: u32) {
         if !cfg!(all(feature = "debug", debug_assertions)) {
             return;
@@ -1558,6 +1763,10 @@ impl<A: Allocator> Dlmalloc<A> {
         }
     }
 
+    /// Implements check treebin.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn check_treebin(&mut self, idx: u32) {
         if !cfg!(all(feature = "debug", debug_assertions)) {
             return;
@@ -1572,6 +1781,10 @@ impl<A: Allocator> Dlmalloc<A> {
         }
     }
 
+    /// Implements check tree.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn check_tree(&mut self, t: *mut TreeChunk) {
         if !cfg!(all(feature = "debug", debug_assertions)) {
             return;
@@ -1638,11 +1851,16 @@ impl<A: Allocator> Dlmalloc<A> {
         debug_assert!(!head.is_null());
     }
 
+    /// Implements min size for tree index.
     fn min_size_for_tree_index(&self, idx: u32) -> usize {
         let idx = usize::try_from(idx).unwrap();
         (1 << ((idx >> 1) + TREEBIN_SHIFT)) | ((idx & 1) << ((idx >> 1) + TREEBIN_SHIFT - 1))
     }
 
+    /// Implements bin find.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn bin_find(&mut self, chunk: *mut Chunk) -> bool {
         let size = Chunk::size(chunk);
         if self.is_small(size) {
@@ -1689,14 +1907,26 @@ impl<A: Allocator> Dlmalloc<A> {
         }
     }
 
+    /// Implements traverse and check.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn traverse_and_check(&self) -> usize {
         0
     }
 
+    /// Implements trim.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     pub unsafe fn trim(&mut self, pad: usize) -> bool {
         self.sys_trim(pad)
     }
 
+    /// Implements destroy.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     pub unsafe fn destroy(mut self) -> usize {
         let mut freed = 0;
         let mut sp: *mut Segment = &mut self.seg;
@@ -1721,95 +1951,176 @@ const INUSE: usize = PINUSE | CINUSE;
 const FLAG_BITS: usize = PINUSE | CINUSE | FLAG4;
 
 impl Chunk {
+    /// Implements fencepost head.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn fencepost_head() -> usize {
         INUSE | mem::size_of::<usize>()
     }
 
+    /// Implements size.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn size(me: *mut Chunk) -> usize {
         (*me).head & !FLAG_BITS
     }
 
+    /// Implements next.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn next(me: *mut Chunk) -> *mut Chunk {
         me.cast::<u8>().add((*me).head & !FLAG_BITS).cast()
     }
 
+    /// Implements prev.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn prev(me: *mut Chunk) -> *mut Chunk {
         me.cast::<u8>().sub((*me).prev_foot).cast()
     }
 
+    /// Implements cinuse.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn cinuse(me: *mut Chunk) -> bool {
         (*me).head & CINUSE != 0
     }
 
+    /// Implements pinuse.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn pinuse(me: *mut Chunk) -> bool {
         (*me).head & PINUSE != 0
     }
 
+    /// Implements clear pinuse.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn clear_pinuse(me: *mut Chunk) {
         (*me).head &= !PINUSE;
     }
 
+    /// Implements inuse.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn inuse(me: *mut Chunk) -> bool {
         (*me).head & INUSE != PINUSE
     }
 
+    /// Implements mmapped.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn mmapped(me: *mut Chunk) -> bool {
         (*me).head & INUSE == 0
     }
 
+    /// Sets set inuse.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn set_inuse(me: *mut Chunk, size: usize) {
         (*me).head = ((*me).head & PINUSE) | size | CINUSE;
         let next = Chunk::plus_offset(me, size);
         (*next).head |= PINUSE;
     }
 
+    /// Sets set inuse and pinuse.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn set_inuse_and_pinuse(me: *mut Chunk, size: usize) {
         (*me).head = PINUSE | size | CINUSE;
         let next = Chunk::plus_offset(me, size);
         (*next).head |= PINUSE;
     }
 
+    /// Sets set size and pinuse of inuse chunk.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn set_size_and_pinuse_of_inuse_chunk(me: *mut Chunk, size: usize) {
         (*me).head = size | PINUSE | CINUSE;
     }
 
+    /// Sets set size and pinuse of free chunk.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn set_size_and_pinuse_of_free_chunk(me: *mut Chunk, size: usize) {
         (*me).head = size | PINUSE;
         Chunk::set_foot(me, size);
     }
 
+    /// Sets set free with pinuse.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn set_free_with_pinuse(p: *mut Chunk, size: usize, n: *mut Chunk) {
         Chunk::clear_pinuse(n);
         Chunk::set_size_and_pinuse_of_free_chunk(p, size);
     }
 
+    /// Sets set foot.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn set_foot(me: *mut Chunk, size: usize) {
         let next = Chunk::plus_offset(me, size);
         (*next).prev_foot = size;
     }
 
+    /// Implements plus offset.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn plus_offset(me: *mut Chunk, offset: usize) -> *mut Chunk {
         me.cast::<u8>().add(offset).cast()
     }
 
+    /// Implements minus offset.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn minus_offset(me: *mut Chunk, offset: usize) -> *mut Chunk {
         me.cast::<u8>().sub(offset).cast()
     }
 
+    /// Implements to mem.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn to_mem(me: *mut Chunk) -> *mut u8 {
         me.cast::<u8>().add(Chunk::mem_offset())
     }
 
+    /// Implements mem offset.
     fn mem_offset() -> usize {
         2 * mem::size_of::<usize>()
     }
 
+    /// Implements from mem.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn from_mem(mem: *mut u8) -> *mut Chunk {
         mem.sub(2 * mem::size_of::<usize>()).cast()
     }
 }
 
 impl TreeChunk {
+    /// Implements leftmost child.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn leftmost_child(me: *mut TreeChunk) -> *mut TreeChunk {
         let left = (*me).child[0];
         if left.is_null() {
@@ -1819,14 +2130,26 @@ impl TreeChunk {
         }
     }
 
+    /// Implements chunk.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn chunk(me: *mut TreeChunk) -> *mut Chunk {
         ptr::addr_of_mut!((*me).chunk)
     }
 
+    /// Implements next.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn next(me: *mut TreeChunk) -> *mut TreeChunk {
         (*TreeChunk::chunk(me)).next.cast()
     }
 
+    /// Implements prev.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn prev(me: *mut TreeChunk) -> *mut TreeChunk {
         (*TreeChunk::chunk(me)).prev.cast()
     }
@@ -1835,6 +2158,10 @@ impl TreeChunk {
 const EXTERN: u32 = 1 << 0;
 
 impl Segment {
+    /// Checks whether is extern.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn is_extern(seg: *mut Segment) -> bool {
         (*seg).flags & EXTERN != 0
     }
@@ -1843,14 +2170,26 @@ impl Segment {
         system_allocator.can_release_part((*seg).flags >> 1)
     }
 
+    /// Implements sys flags.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn sys_flags(seg: *mut Segment) -> u32 {
         (*seg).flags >> 1
     }
 
+    /// Implements holds.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn holds(seg: *mut Segment, addr: *mut u8) -> bool {
         (*seg).base <= addr && addr < Segment::top(seg)
     }
 
+    /// Implements top.
+    ///
+    /// # Safety
+    /// The caller must uphold the required pointer and ABI invariants.
     unsafe fn top(seg: *mut Segment) -> *mut u8 {
         (*seg).base.add((*seg).size)
     }
@@ -1877,6 +2216,7 @@ mod tests {
     #[test]
     // Test allocating, with a non-empty treemap, a specific size that used to
     // trigger an integer overflow bug
+    /// Implements treemap alloc overflow minimal.
     fn treemap_alloc_overflow_minimal() {
         let mut a = Dlmalloc::new(System::new());
         unsafe {
@@ -1889,6 +2229,7 @@ mod tests {
     #[test]
     #[cfg(not(miri))]
     // Test allocating the maximum request size with a non-empty treemap
+    /// Implements treemap alloc max.
     fn treemap_alloc_max() {
         let mut a = Dlmalloc::new(System::new());
         unsafe {

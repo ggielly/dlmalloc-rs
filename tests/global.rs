@@ -8,11 +8,13 @@ use std::thread;
 static A: dlmalloc::GlobalDlmalloc = dlmalloc::GlobalDlmalloc;
 
 #[test]
+/// Implements foo.
 fn foo() {
     println!("hello");
 }
 
 #[test]
+/// Implements map.
 fn map() {
     let mut m = HashMap::new();
     m.insert(1, 2);
@@ -21,12 +23,14 @@ fn map() {
 }
 
 #[test]
+/// Implements strings.
 fn strings() {
     format!("foo, bar, {}", "baz");
 }
 
 #[test]
 #[cfg(not(target_family = "wasm"))]
+/// Implements threads.
 fn threads() {
     assert!(thread::spawn(|| panic!()).join().is_err());
 }

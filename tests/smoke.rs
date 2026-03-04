@@ -3,6 +3,7 @@ use dlmalloc::Dlmalloc;
 use rand::{rngs::SmallRng, RngCore, SeedableRng};
 
 #[test]
+/// Implements smoke.
 fn smoke() {
     let mut a = Dlmalloc::new();
     unsafe {
@@ -24,6 +25,7 @@ fn smoke() {
 mod fuzz;
 
 #[test]
+/// Implements stress.
 fn stress() {
     let mut rng = SmallRng::seed_from_u64(0);
     let mut buf = vec![0; 4096];
