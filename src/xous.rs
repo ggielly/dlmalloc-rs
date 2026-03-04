@@ -6,6 +6,7 @@ pub struct System {
 }
 
 impl System {
+    /// Creates a new instance.
     pub const fn new() -> System {
         System { _priv: () }
     }
@@ -15,6 +16,7 @@ impl System {
 mod sys {
     use core::arch::asm;
 
+    /// Implements increase heap.
     pub fn increase_heap(length: usize) -> Result<(usize, usize), ()> {
         let syscall_no_increase_heap = 10usize;
         let memory_flags_read_write = 2usize | 4usize;
@@ -73,45 +75,57 @@ unsafe impl Allocator for System {
         }
     }
 
+    /// Implements remap.
     fn remap(&self, _ptr: *mut u8, _oldsize: usize, _newsize: usize, _can_move: bool) -> *mut u8 {
         // TODO
         ptr::null_mut()
     }
 
+    /// Implements free part.
     fn free_part(&self, _ptr: *mut u8, _oldsize: usize, _newsize: usize) -> bool {
         false
     }
 
+    /// Implements free.
     fn free(&self, _ptr: *mut u8, _size: usize) -> bool {
         false
     }
 
+    /// Implements can release part.
     fn can_release_part(&self, _flags: u32) -> bool {
         false
     }
 
+    /// Implements allocates zeros.
     fn allocates_zeros(&self) -> bool {
         true
     }
 
+    /// Implements page size.
     fn page_size(&self) -> usize {
         4 * 1024
     }
 }
 
 #[cfg(feature = "global")]
+/// Implements acquire global lock.
 pub fn acquire_global_lock() {
     // global feature should not be enabled
     unimplemented!()
 }
 
 #[cfg(feature = "global")]
+/// Implements release global lock.
 pub fn release_global_lock() {
     // global feature should not be enabled
     unimplemented!()
 }
 
 #[cfg(feature = "global")]
+/// Implements enable alloc after fork.
+///
+/// # Safety
+/// The caller must uphold the required pointer and ABI invariants.
 pub unsafe fn enable_alloc_after_fork() {
     // platform does not support `fork()` call
 }

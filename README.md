@@ -6,6 +6,11 @@ A port of [dlmalloc] to Rust.
 
 [dlmalloc]: https://gee.cs.oswego.edu/dl/html/malloc.html
 
+## Strat9-OS fork note
+
+This repository is used as a fork for Strat9-OS integration and may contain
+Strat9-specific allocator patches not present in upstream.
+
 ## Why dlmalloc?
 
 This crate is a port of [dlmalloc] to Rust, and doesn't rely on C. The primary
